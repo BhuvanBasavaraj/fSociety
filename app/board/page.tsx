@@ -244,14 +244,39 @@ function RightSidebar() {
 export default function BoardPage() {
   const [sort, setSort] = useState<SortKey>("hot");
   const [isModalOpen, setIsModalOpen] = useState(false);
+  
+  // 1. Put the threads in real state!
+  const [threadList, setThreadList] = useState<Thread[]>(THREADS);
 
-  const threads = useMemo(() => {
-    const list = [...THREADS];
+  // 2. Function to add a brand new thread to the top of the feed
+  const handleCreateThread = (newThread: { title: string; channel: string; excerpt: string }) => {
+    // Generate a cool tactical ID like 'E9A2-8F14'
+    const randomHex = () => Math.floor(Math.random() * 0xffff).toString(16).toUpperCase().padStart(4, "0");
+    const generatedId = `${randomHex()}-${randomHex()}`;
+
+    const created: Thread = {
+      id: generatedId,
+      channel: newThread.channel,
+      title: newThread.title,
+      excerpt: newThread.excerpt,
+      ttlMinutes: 24 * 60, // 24 hours fresh TTL
+      contributors: 1,
+      replies: 0,
+      heat: 5, // Top priority heat!
+      ageMinutes: 0,
+    };
+
+    // Prepend to the top of the list!
+    setThreadList((prev) => [created, ...prev]);
+  };
+
+  const sortedThreads = useMemo(() => {
+    const list = [...threadList];
     if (sort === "hot") list.sort((a, b) => b.heat - a.heat || b.replies - a.replies);
     if (sort === "new") list.sort((a, b) => a.ageMinutes - b.ageMinutes);
     if (sort === "expiring") list.sort((a, b) => a.ttlMinutes - b.ttlMinutes);
     return list;
-  }, [sort]);
+  }, [threadList, sort]);
 
   return (
     <MotionConfig reducedMotion="user">
@@ -265,7 +290,9 @@ export default function BoardPage() {
             <div className="sticky top-0 z-20 -mx-6 mb-8 flex items-center justify-between border-b border-white/10 bg-black/80 px-6 py-4 backdrop-blur-md">
               <div>
                 <h1 className="text-2xl font-bold tracking-tighter text-white font-sans">Live Feed</h1>
-                <p className="mt-1 text-[10px] font-mono tracking-widest uppercase text-zinc-500">{THREADS.length} ACTIVE THREADS</p>
+                <p className="mt-1 text-[10px] font-mono tracking-widest uppercase text-zinc-500">
+                  {sortedThreads.length} ACTIVE THREADS
+                </p>
               </div>
 
               <div className="flex items-center gap-6">
@@ -273,8 +300,23 @@ export default function BoardPage() {
                   {SORTS.map((s) => {
                     const active = sort === s.key;
                     return (
-                      <button key={s.key} role="tab" aria-selected={active} onClick={() => setSort(s.key)} className={`relative px-4 py-1.5 text-[10px] tracking-[0.2em] outline-none transition-colors ${active ? "text-black" : "text-zinc-500 hover:text-white"}`}>
-                        {active && <motion.span layoutId="sort-pill" aria-hidden className="absolute inset-0 bg-[#E4FF00] shadow-[0_0_15px_rgba(228,255,0,0.3)]" transition={{ type: "spring", stiffness: 400, damping: 30 }} />}
+                      <button 
+                        key={s.key} 
+                        role="tab" 
+                        aria-selected={active} 
+                        onClick={() => setSort(s.key)} 
+                        className={`relative px-4 py-1.5 text-[10px] tracking-[0.2em] outline-none transition-colors ${
+                          active ? "text-black" : "text-zinc-500 hover:text-white"
+                        }`}
+                      >
+                        {active && (
+                          <motion.span 
+                            layoutId="sort-pill" 
+                            aria-hidden 
+                            className="absolute inset-0 bg-[#E4FF00] shadow-[0_0_15px_rgba(228,255,0,0.3)]" 
+                            transition={{ type: "spring", stiffness: 400, damping: 30 }} 
+                          />
+                        )}
                         <span className="relative font-bold z-10">{s.label}</span>
                       </button>
                     );
@@ -292,13 +334,21 @@ export default function BoardPage() {
 
             {/* Thread Feed */}
             <motion.div variants={feedVariants} initial="hidden" animate="show" className="flex flex-col gap-5">
-              {threads.map((t) => <ThreadCard key={t.id} t={t} />)}
+              {sortedThreads.map((t) => (
+                <ThreadCard key={t.id} t={t} />
+              ))}
             </motion.div>
           </div>
         </main>
 
         <RightSidebar />
-        <CreateThreadModal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} />
+        
+        {/* Pass the handleCreateThread function to the modal! */}
+        <CreateThreadModal 
+          isOpen={isModalOpen} 
+          onClose={() => setIsModalOpen(false)} 
+          onSubmit={handleCreateThread}
+        />
       </div>
     </MotionConfig>
   );
