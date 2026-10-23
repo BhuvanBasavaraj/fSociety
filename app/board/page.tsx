@@ -2,24 +2,20 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { IBM_Plex_Mono, Inter } from "next/font/google";
 import { motion, MotionConfig, type Variants } from "framer-motion";
 import CreateThreadModal from "../components/CreateThreadModal";
+import { supabase } from "@/lib/supabase"; // <-- IMPORTING SUPABASE HERE
 
-const mono = IBM_Plex_Mono({
-  subsets: ["latin"],
-  weight: ["400", "500", "700"],
-  variable: "--font-mono",
-});
+const mono = IBM_Plex_Mono({ subsets: ["latin"], weight: ["400", "500", "700"], variable: "--font-mono" });
 const sans = Inter({ subsets: ["latin"], variable: "--font-sans" });
 
-// MOTION.DEV AESTHETIC COLORS
 const YELLOW = "#E4FF00";
-const BG = "#000000"; // True Black
+const BG = "#000000";
 
 /* ------------------------------------------------------------------ */
-/* Data                                                               */
+/* Data Types & Constants                                             */
 /* ------------------------------------------------------------------ */
 
 const CHANNELS = [
@@ -42,43 +38,8 @@ type Thread = {
   heat: 1 | 2 | 3 | 4 | 5;
   ageMinutes: number;
   restricted?: boolean;
+  author: string; // <-- ADD THIS LINE
 };
-
-const THREADS: Thread[] = [
-  {
-    id: "A7F3-0412",
-    channel: "tech-leaks",
-    title: "Internal memo: the 'sunset' list for three data brokers is wrong",
-    excerpt: "Two of the vendors named in the public notice are still receiving nightly exports. Timestamps and request headers attached below, sanitized.",
-    ttlMinutes: 23 * 60 + 41,
-    contributors: 4,
-    replies: 37,
-    heat: 5,
-    ageMinutes: 42,
-  },
-  {
-    id: "C19D-7781",
-    channel: "rent-watch",
-    title: "Same landlord LLC, six buildings, identical 'renovation fee' clauses",
-    excerpt: "Compared leases from four tenants across the district. The clause wording matches word for word. Looking for anyone with a fifth or sixth copy.",
-    ttlMinutes: 18 * 60 + 5,
-    contributors: 9,
-    replies: 112,
-    heat: 4,
-    ageMinutes: 130,
-  },
-  {
-    id: "E402-AA19",
-    channel: "wage-theft",
-    title: "Warehouse shift app quietly rounds clock-out times down",
-    excerpt: "Logged 30 shifts against the app's own export. The average loss is 11 minutes a day. Method and spreadsheet template in the first reply.",
-    ttlMinutes: 6 * 60 + 12,
-    contributors: 14,
-    replies: 203,
-    heat: 5,
-    ageMinutes: 310,
-  },
-];
 
 const SORTS = [
   { key: "hot", label: "HOT" },
@@ -102,19 +63,16 @@ const feedVariants: Variants = { hidden: {}, show: { transition: { staggerChildr
 const cardVariants: Variants = { hidden: { opacity: 0, y: 16 }, show: { opacity: 1, y: 0, transition: { duration: 0.5, ease: EASE } } };
 
 /* ------------------------------------------------------------------ */
-/* Components                                                         */
+/* Components (Logo, Sidebar, Cards)                                  */
 /* ------------------------------------------------------------------ */
 
-// THE NEW LOGO
 function Logo() {
   return (
     <div className="flex items-center gap-3 border-b border-white/10 px-6 py-6">
-      {/* Glowing SVG Icon */}
       <svg width="20" height="20" viewBox="0 0 24 24" fill="none" className="drop-shadow-[0_0_10px_rgba(228,255,0,0.8)]">
         <path d="M12 2L22 22H2L12 2Z" fill="#E4FF00" />
         <circle cx="12" cy="15" r="3" fill="#000000" />
       </svg>
-      {/* Tight, sans-serif typography */}
       <span className="text-lg font-sans font-bold tracking-tighter text-white">fSociety</span>
     </div>
   );
@@ -122,46 +80,40 @@ function Logo() {
 
 function NavLink({ href, label, live, active }: { href: string; label: string; live?: number; active?: boolean }) {
   return (
-    <Link
-      href={href}
-      className={`group relative flex items-center justify-between py-2.5 pl-6 pr-4 text-[13px] outline-none transition-colors ${
-        active ? "bg-white/[0.04] text-white" : "text-zinc-500 hover:text-white"
-      }`}
-    >
-      <span
-        aria-hidden
-        className={`absolute left-0 top-0 h-full w-[2px] origin-center bg-[#E4FF00] shadow-[0_0_10px_rgba(228,255,0,0.7)] transition-transform duration-200 group-hover:scale-y-100 ${
-          active ? "scale-y-100" : "scale-y-0"
-        }`}
-      />
+    <Link href={href} className={`group relative flex items-center justify-between py-2.5 pl-6 pr-4 text-[13px] outline-none transition-colors ${active ? "bg-white/[0.04] text-white" : "text-zinc-500 hover:text-white"}`}>
+      <span aria-hidden className={`absolute left-0 top-0 h-full w-[2px] origin-center bg-[#E4FF00] shadow-[0_0_10px_rgba(228,255,0,0.7)] transition-transform duration-200 group-hover:scale-y-100 ${active ? "scale-y-100" : "scale-y-0"}`} />
       <span className="flex items-center gap-2">{label}</span>
       {live !== undefined && <span className="text-[11px] tabular-nums text-zinc-600 transition-colors group-hover:text-[#E4FF00]">{live}</span>}
     </Link>
   );
 }
 
+// Change the function definition to this:
 function LeftSidebar() {
   const pathname = usePathname();
+  const router = useRouter(); // <-- Add this
+
+  const handleLogout = async () => {
+    await supabase.auth.signOut();
+    router.push("/login");
+  };
+
   return (
-    <motion.aside
-      initial={{ x: -280, opacity: 0 }}
-      animate={{ x: 0, opacity: 1 }}
-      transition={{ duration: 0.8, ease: EASE }}
-      className="hidden w-64 shrink-0 flex-col border-r border-white/10 bg-black lg:flex"
-    >
+    <motion.aside initial={{ x: -280, opacity: 0 }} animate={{ x: 0, opacity: 1 }} transition={{ duration: 0.8, ease: EASE }} className="hidden w-64 shrink-0 flex-col border-r border-white/10 bg-black lg:flex">
       <Logo />
+      {/* ... keeping the nav/channels exactly the same ... */}
       <nav aria-label="Channels" className="flex-1 overflow-y-auto py-6">
         <p className="px-6 pb-3 text-[10px] tracking-[0.25em] text-zinc-600 font-mono">CHANNELS</p>
         <NavLink href="/board" label="all-channels" active={pathname === "/board"} />
         <div className="my-4 mx-6 border-t border-white/10" />
-        {CHANNELS.map((c) => (
-          <NavLink key={c.href} href={c.href} label={`/s/${c.label}`} live={c.live} active={pathname === c.href} />
-        ))}
+        {CHANNELS.map((c) => <NavLink key={c.href} href={c.href} label={`/s/${c.label}`} live={c.live} active={pathname === c.href} />)}
       </nav>
+      
+      {/* UPDATE THIS BOTTOM DIV: */}
       <div className="border-t border-white/10 p-6">
-        <Link href="/" className="block w-full border border-white/10 py-2.5 text-center text-[10px] font-mono tracking-[0.25em] text-zinc-500 transition-all hover:border-[#E4FF00] hover:text-[#E4FF00] hover:shadow-[0_0_15px_rgba(228,255,0,0.15)]">
+        <button onClick={handleLogout} className="block w-full border border-white/10 py-2.5 text-center text-[10px] font-mono tracking-[0.25em] text-zinc-500 transition-all hover:border-[#E4FF00] hover:text-[#E4FF00] hover:shadow-[0_0_15px_rgba(228,255,0,0.15)]">
           TERMINATE
-        </Link>
+        </button>
       </div>
     </motion.aside>
   );
@@ -170,11 +122,7 @@ function LeftSidebar() {
 function ThreadCard({ t }: { t: Thread }) {
   const urgent = t.ttlMinutes < 120;
   return (
-    <motion.article
-      layout
-      variants={cardVariants}
-      className="group relative border border-white/10 bg-white/[0.01] transition-all duration-300 hover:border-[#E4FF00]/50 hover:bg-white/[0.03] hover:shadow-[0_4px_30px_rgba(228,255,0,0.03)]"
-    >
+    <motion.article layout variants={cardVariants} className="group relative border border-white/10 bg-white/[0.01] transition-all duration-300 hover:border-[#E4FF00]/50 hover:bg-white/[0.03] hover:shadow-[0_4px_30px_rgba(228,255,0,0.03)]">
       <header className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1 border-b border-white/10 px-6 py-3 text-[10px] uppercase font-mono tracking-wider text-zinc-500">
         <span>THREAD <span className="text-zinc-400">#{t.id}</span></span>
         <span className="flex items-center gap-3">
@@ -182,25 +130,17 @@ function ThreadCard({ t }: { t: Thread }) {
           <span style={{ color: t.restricted ? YELLOW : undefined }}>{t.restricted ? "CLASS: RESTRICTED" : "CLASS: OPEN"}</span>
         </span>
       </header>
-
       <div className="px-6 py-5">
-        <h2 className="text-[18px] font-semibold tracking-tight leading-snug text-zinc-100 group-hover:text-[#E4FF00] transition-colors" style={{ fontFamily: "var(--font-sans)" }}>
-          {t.title}
-        </h2>
-        <p className="mt-2 text-[14px] leading-relaxed text-zinc-400" style={{ fontFamily: "var(--font-sans)" }}>
-          {t.excerpt}
-        </p>
+        <h2 className="text-[18px] font-semibold tracking-tight leading-snug text-zinc-100 group-hover:text-[#E4FF00] transition-colors" style={{ fontFamily: "var(--font-sans)" }}>{t.title}</h2>
+        <p className="mt-2 text-[14px] leading-relaxed text-zinc-400" style={{ fontFamily: "var(--font-sans)" }}>{t.excerpt}</p>
       </div>
-
-      <footer className="flex flex-wrap items-center gap-x-6 gap-y-2 border-t border-white/10 px-6 py-3 text-[10px] uppercase font-mono tracking-wider text-zinc-500">
-        <span className="flex items-center gap-2">
-          TTL:
-          <span className={urgent ? "font-bold text-[#E4FF00]" : "text-zinc-300"}>{fmtTtl(t.ttlMinutes)}</span>
-        </span>
-        <span>CONTRIBUTORS: <span className="text-zinc-300">{t.contributors}</span></span>
-        <span>REPLIES: <span className="text-zinc-300">{t.replies}</span></span>
-        <span className="ml-auto">{fmtAge(t.ageMinutes)}</span>
-      </footer>
+<footer className="flex flex-wrap items-center gap-x-6 gap-y-2 border-t border-white/10 px-6 py-3 text-[10px] uppercase font-mono tracking-wider text-zinc-500">
+  <span className="flex items-center gap-2">BY:<span className="font-bold text-zinc-300">{t.author}</span></span>
+  <span className="flex items-center gap-2">TTL:<span className={urgent ? "font-bold text-[#E4FF00]" : "text-zinc-300"}>{fmtTtl(t.ttlMinutes)}</span></span>
+  <span>CONTRIBUTORS: <span className="text-zinc-300">{t.contributors}</span></span>
+  <span>REPLIES: <span className="text-zinc-300">{t.replies}</span></span>
+  <span className="ml-auto">{fmtAge(t.ageMinutes)}</span>
+</footer>
     </motion.article>
   );
 }
@@ -208,20 +148,13 @@ function ThreadCard({ t }: { t: Thread }) {
 function RightSidebar() {
   const [uptime, setUptime] = useState(0);
   const [sessionId, setSessionId] = useState("--------");
-
   useEffect(() => {
     setSessionId(Array.from({ length: 8 }, () => "0123456789ABCDEF"[rand(0, 15)]).join(""));
     const clock = setInterval(() => setUptime((u) => u + 1), 1000);
     return () => clearInterval(clock);
   }, []);
-
   return (
-    <motion.aside
-      initial={{ x: 320, opacity: 0 }}
-      animate={{ x: 0, opacity: 1 }}
-      transition={{ duration: 0.8, ease: EASE }}
-      className="hidden w-72 shrink-0 flex-col overflow-y-auto border-l border-white/10 bg-black xl:flex"
-    >
+    <motion.aside initial={{ x: 320, opacity: 0 }} animate={{ x: 0, opacity: 1 }} transition={{ duration: 0.8, ease: EASE }} className="hidden w-72 shrink-0 flex-col overflow-y-auto border-l border-white/10 bg-black xl:flex">
       <section className="border-b border-white/10 px-6 py-6">
         <h3 className="text-[10px] tracking-[0.25em] text-zinc-600 font-mono">SESSION</h3>
         <div className="mt-4 flex items-center gap-3 text-[12px] font-sans font-semibold tracking-tight text-[#E4FF00]">
@@ -238,19 +171,60 @@ function RightSidebar() {
 }
 
 /* ------------------------------------------------------------------ */
-/* Page                                                               */
+/* Page - THE BRAINS                                                  */
 /* ------------------------------------------------------------------ */
 
 export default function BoardPage() {
-  const [sort, setSort] = useState<SortKey>("hot");
-  const [isModalOpen, setIsModalOpen] = useState(false);
+  const router = useRouter(); // <-- 1. Add the router
   
-  // 1. Put the threads in real state!
-  const [threadList, setThreadList] = useState<Thread[]>(THREADS);
+  const [sort, setSort] = useState<SortKey>("new");
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [threadList, setThreadList] = useState<Thread[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
 
-  // 2. Function to add a brand new thread to the top of the feed
+  // 2. Update your useEffect to check auth FIRST
+  useEffect(() => {
+    const fetchThreadsAndCheckAuth = async () => {
+      // THE BOUNCER: Check if they are logged in
+      const { data: { session } } = await supabase.auth.getSession();
+      
+      if (!session) {
+        // If no session exists, kick them back to login!
+        router.push("/login");
+        return; 
+      }
+
+      // If they ARE logged in, fetch the threads like normal:
+      const { data, error } = await supabase
+        .from('threads')
+        .select('*')
+        .order('created_at', { ascending: false });
+
+      if (error) {
+        console.error("Failed to fetch from Supabase:", error);
+      } else if (data) {
+        const mappedThreads: Thread[] = data.map((row) => ({
+          id: row.id,
+          channel: row.channel,
+          title: row.title,
+          excerpt: row.excerpt,
+          ttlMinutes: row.ttl_minutes,
+          contributors: row.contributors,
+          replies: row.replies,
+          heat: row.heat,
+          ageMinutes: row.age_minutes,
+          author: row.author,
+        }));
+        setThreadList(mappedThreads);
+      }
+      setIsLoading(false);
+    };
+
+    fetchThreadsAndCheckAuth();
+  }, [router]);
+
   const handleCreateThread = (newThread: { title: string; channel: string; excerpt: string }) => {
-    // Generate a cool tactical ID like 'E9A2-8F14'
+    // Generate the ID locally so the UI updates instantly
     const randomHex = () => Math.floor(Math.random() * 0xffff).toString(16).toUpperCase().padStart(4, "0");
     const generatedId = `${randomHex()}-${randomHex()}`;
 
@@ -259,14 +233,13 @@ export default function BoardPage() {
       channel: newThread.channel,
       title: newThread.title,
       excerpt: newThread.excerpt,
-      ttlMinutes: 24 * 60, // 24 hours fresh TTL
+      ttlMinutes: 24 * 60,
       contributors: 1,
       replies: 0,
-      heat: 5, // Top priority heat!
+      heat: 5,
       ageMinutes: 0,
+      author: newThread.author,
     };
-
-    // Prepend to the top of the list!
     setThreadList((prev) => [created, ...prev]);
   };
 
@@ -286,12 +259,11 @@ export default function BoardPage() {
         <main className="relative min-w-0 flex-1 overflow-y-auto [scrollbar-width:none]">
           <div className="relative z-10 mx-auto max-w-4xl px-6 pb-16 pt-8">
             
-            {/* Header Area */}
             <div className="sticky top-0 z-20 -mx-6 mb-8 flex items-center justify-between border-b border-white/10 bg-black/80 px-6 py-4 backdrop-blur-md">
               <div>
                 <h1 className="text-2xl font-bold tracking-tighter text-white font-sans">Live Feed</h1>
                 <p className="mt-1 text-[10px] font-mono tracking-widest uppercase text-zinc-500">
-                  {sortedThreads.length} ACTIVE THREADS
+                  {isLoading ? "ESTABLISHING CONNECTION..." : `${sortedThreads.length} ACTIVE THREADS`}
                 </p>
               </div>
 
@@ -300,55 +272,39 @@ export default function BoardPage() {
                   {SORTS.map((s) => {
                     const active = sort === s.key;
                     return (
-                      <button 
-                        key={s.key} 
-                        role="tab" 
-                        aria-selected={active} 
-                        onClick={() => setSort(s.key)} 
-                        className={`relative px-4 py-1.5 text-[10px] tracking-[0.2em] outline-none transition-colors ${
-                          active ? "text-black" : "text-zinc-500 hover:text-white"
-                        }`}
-                      >
-                        {active && (
-                          <motion.span 
-                            layoutId="sort-pill" 
-                            aria-hidden 
-                            className="absolute inset-0 bg-[#E4FF00] shadow-[0_0_15px_rgba(228,255,0,0.3)]" 
-                            transition={{ type: "spring", stiffness: 400, damping: 30 }} 
-                          />
-                        )}
+                      <button key={s.key} role="tab" aria-selected={active} onClick={() => setSort(s.key)} className={`relative px-4 py-1.5 text-[10px] tracking-[0.2em] outline-none transition-colors ${active ? "text-black" : "text-zinc-500 hover:text-white"}`}>
+                        {active && <motion.span layoutId="sort-pill" aria-hidden className="absolute inset-0 bg-[#E4FF00] shadow-[0_0_15px_rgba(228,255,0,0.3)]" transition={{ type: "spring", stiffness: 400, damping: 30 }} />}
                         <span className="relative font-bold z-10">{s.label}</span>
                       </button>
                     );
                   })}
                 </div>
                 
-                <button 
-                  onClick={() => setIsModalOpen(true)} 
-                  className="bg-white/10 border border-white/20 text-white px-5 py-2 text-[10px] font-mono font-bold tracking-widest hover:bg-[#E4FF00] hover:text-black hover:border-[#E4FF00] hover:shadow-[0_0_20px_rgba(228,255,0,0.4)] transition-all duration-300"
-                >
+                <button onClick={() => setIsModalOpen(true)} className="bg-white/10 border border-white/20 text-white px-5 py-2 text-[10px] font-mono font-bold tracking-widest hover:bg-[#E4FF00] hover:text-black hover:border-[#E4FF00] hover:shadow-[0_0_20px_rgba(228,255,0,0.4)] transition-all duration-300">
                   + NEW THREAD
                 </button>
               </div>
             </div>
 
-            {/* Thread Feed */}
-            <motion.div variants={feedVariants} initial="hidden" animate="show" className="flex flex-col gap-5">
-              {sortedThreads.map((t) => (
-                <ThreadCard key={t.id} t={t} />
-              ))}
-            </motion.div>
+            {/* If loading, show a cool terminal loading state */}
+            {isLoading ? (
+              <div className="flex flex-col items-center justify-center py-20 opacity-50">
+                <motion.div animate={{ rotate: 360 }} transition={{ repeat: Infinity, duration: 2, ease: "linear" }} className="h-8 w-8 rounded-full border-b-2 border-r-2 border-[#E4FF00]" />
+                <p className="mt-4 font-mono text-[10px] tracking-widest text-[#E4FF00]">DECRYPTING CLOUD DATABANKS...</p>
+              </div>
+            ) : (
+              <motion.div variants={feedVariants} initial="hidden" animate="show" className="flex flex-col gap-5">
+                {sortedThreads.map((t) => (
+                  <ThreadCard key={t.id} t={t} />
+                ))}
+              </motion.div>
+            )}
+
           </div>
         </main>
 
         <RightSidebar />
-        
-        {/* Pass the handleCreateThread function to the modal! */}
-        <CreateThreadModal 
-          isOpen={isModalOpen} 
-          onClose={() => setIsModalOpen(false)} 
-          onSubmit={handleCreateThread}
-        />
+        <CreateThreadModal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} onSubmit={handleCreateThread} />
       </div>
     </MotionConfig>
   );
